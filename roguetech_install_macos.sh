@@ -114,6 +114,7 @@ popd >/dev/null  # CabCache
 popd >/dev/null  # RtlCache
 
 RTLCACHE="${BASE}/../RtlCache"
+RTCACHE="${RTLCACHE}/RtCache"
 
 # Symlink the full install repos into the mod directory.
 pushd "${MOD_DIR}" >/dev/null
@@ -155,7 +156,7 @@ function DoNormalInstall() {
   local TASK_NODE_PATH="${3}"
 
   ExtractXPathArrayFromString "${RT_CONFIG}" ${TASK_NODE_PATH}/excludePaths
-  local EXCLUDES=${EXTRACT_XPATH_ARRAY}
+  local EXCLUDES=${EXTRACT_XPATH_ARRAY[@]}
 
   local SOURCE_PATH=$(xpath -q -e "${TASK_NODE_PATH}/sourcePath/text()" "${XMLFILE}")
   local TARGET_PATH=$(xpath -q -e "${TASK_NODE_PATH}/targetPath/text()" "${XMLFILE}")
@@ -180,7 +181,7 @@ function DoBasicJSONMerge() {
 
   local SOURCE_PATH=$(xpath -q -e "${TASK_NODE_PATH}/sourcePath/text()" "${XMLFILE}")
   local TARGET_PATH=$(xpath -q -e "${TASK_NODE_PATH}/targetPath/text()" "${XMLFILE}")
-  python3 "${SCRIPT_DIR}/basic_json_merge.py" "${SOURCE_PATH}" "${TARGET_PATH}"
+  python3 "${SCRIPT_DIR}/basic_json_merge.py" "${RTCACHE}/${SOURCE_PATH}" "${TARGET_PATH}"
 }
 
 
@@ -227,7 +228,6 @@ function InstallTask() {
 }
 
 function InstallRTSubcomponents() {
-  local RTCACHE="${BASE}/../RtlCache/RtCache"
   pushd "${MOD_DIR}" >/dev/null
 
   if [[ ! -d ModTek ]]; then
@@ -243,7 +243,7 @@ function InstallRTSubcomponents() {
     cp -R "${RTCACHE}/RogueTechPerfFix" .
   fi
 
-  local RT_CONFIG="${RTCACHE}//RtConfig.xml"
+  local RT_CONFIG="${RTCACHE}/RtConfig.xml"
 
   ExtractXPathArray "${RT_CONFIG}" //RogueTechConfig/Tasks/InstallTask[descendant::isSelected=\"true\"]/Id
   local SELECTED_TASKS=${EXTRACT_XPATH_ARRAY[@]}
