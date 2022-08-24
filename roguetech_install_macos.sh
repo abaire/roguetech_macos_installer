@@ -4,7 +4,7 @@
 set -eu
 set -o pipefail
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+readonly SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 readonly STEAM_INSTALL_DIR="${HOME}/Library/Application Support/Steam/steamapps/common/BATTLETECH/BattleTech.app"
 
 if [[ ! -d "${STEAM_INSTALL_DIR}" ]]; then
@@ -24,6 +24,18 @@ if [[ ! $(which xpath) ]]; then
   echo "xpath must be installed."
   exit 1
 fi
+if [[ ! $(which python3) ]]; then
+  # Should be part of macOS already.
+  echo "Python 3.x must be installed."
+  exit 1
+fi
+# RT JSON is futuristic and makes use of trailing commas that are not supported by the default json module.
+if [[ ! $(python3 -m pip list | grep json5) ]]; then
+  echo "The json5 Python module must be installed. Try:"
+  echo "pip3 install json5"
+  exit 1
+fi
+
 
 NOUPDATE=false
 
@@ -136,6 +148,7 @@ function ExtractXPathArray() {
   EXTRACT_XPATH_ARRAY=($(xpath -q -e "${XPATH}/text()" "${XMLFILE}"))
 }
 
+
 function DoNormalInstall() {
   local XMLFILE="${1}"
   local TASK_ID="${2}"
@@ -159,6 +172,7 @@ function DoNormalInstall() {
   done
 }
 
+
 function DoBasicJSONMerge() {
   local XMLFILE="${1}"
   local TASK_ID="${2}"
@@ -166,10 +180,9 @@ function DoBasicJSONMerge() {
 
   local SOURCE_PATH=$(xpath -q -e "${TASK_NODE_PATH}/sourcePath/text()" "${XMLFILE}")
   local TARGET_PATH=$(xpath -q -e "${TASK_NODE_PATH}/targetPath/text()" "${XMLFILE}")
-
-  echo "Merging ${SOURCE_PATH} into ${TARGET_PATH}"
-  echo "TODO: IMPLEMENT ME"
+  python3 "${SCRIPT_DIR}/basic_json_merge.py" "${SOURCE_PATH}" "${TARGET_PATH}"
 }
+
 
 # As of f459d6a some tasks are skipped:
 #  modtekInstall - Handled explicitly by this script.
@@ -181,6 +194,7 @@ TASK_BLACKLIST=(
   perfixInstall
   CommanderPortraitLoader
 )
+
 function InstallTask() {
   local XMLFILE="${1}"
   local TASK_ID="${2}"
