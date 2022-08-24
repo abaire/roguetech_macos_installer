@@ -68,6 +68,7 @@ function SymlinkIfNeeded() {
   fi
 }
 
+
 function GitClone() {
   local target_dir="${1}"
   local repo="${2}"
@@ -81,6 +82,25 @@ function GitClone() {
     popd >/dev/null
   fi
 }
+
+
+EXTRACT_XPATH_ARRAY=()
+function ExtractXPathArrayFromString() {
+  local XMLFILE="${1}"
+  local XPATH="${2}"
+
+  local ITEMS=$(xpath -q -e "${XPATH}/text()" "${XMLFILE}")
+  EXTRACT_XPATH_ARRAY=($(echo ${ITEMS} | tr "," "\n"))
+}
+
+
+function ExtractXPathArray() {
+  local XMLFILE="${1}"
+  local XPATH="${2}"
+
+  EXTRACT_XPATH_ARRAY=($(xpath -q -e "${XPATH}/text()" "${XMLFILE}"))
+}
+
 
 
 BASE="${STEAM_INSTALL_DIR}"
@@ -100,16 +120,24 @@ mkdir -p RtlCache
 pushd RtlCache >/dev/null
 
 GitClone RtCache https://github.com/BattletechModders/RogueTech.git
+# TODO: Is this actually used?
 GitClone RogueData https://github.com/wmtorode/RogueLauncherData.git
 
-mkdir -p CabCache
-pushd CabCache >/dev/null
-GitClone cabClan https://github.com/BattletechModders/Community-Asset-Bundle-Clan-Mech.git
-GitClone cabIs https://github.com/BattletechModders/Community-Asset-Bundle-IS-Mech.git
-GitClone cabMisc https://github.com/BattletechModders/Community-Asset-Bundle-Miscellaneous.git
-GitClone CabSupRepoData https://github.com/BattletechModders/Community-Asset-Bundle-Data.git
-GitClone cabTank https://github.com/BattletechModders/Community-Asset-Bundle-Tanks.git
-popd >/dev/null  # CabCache
+function InstallCommunityAssetBundles() {
+  mkdir -p CabCache
+  pushd CabCache >/dev/null
+  GitClone CabSupRepoData https://github.com/BattletechModders/Community-Asset-Bundle-Data.git
+  local REPO_MANIFEST="CabSupRepoData/CabRepos.xml"
+
+  ExtractXPathArray "${REPO_MANIFEST}" //CabRepoData/Repos/CabRepo/cacheSubPath
+  local CAB_PATHS=${EXTRACT_XPATH_ARRAY[@]}
+  for path in ${CAB_PATHS[@]}; do
+    local REPO_URL=$(xpath -q -e "//CabRepoData/Repos/CabRepo[cacheSubPath=\"${path}\"]/repoUrl/text()" "${REPO_MANIFEST}")
+    GitClone "${path}" "${REPO_URL}"
+  done
+  popd >/dev/null  # CabCache
+}
+InstallCommunityAssetBundles
 
 popd >/dev/null  # RtlCache
 
@@ -130,24 +158,6 @@ popd >/dev/null
 
 # pop BASE/..
 popd
-
-
-EXTRACT_XPATH_ARRAY=()
-function ExtractXPathArrayFromString() {
-  local XMLFILE="${1}"
-  local XPATH="${2}"
-
-  local ITEMS=$(xpath -q -e "${XPATH}/text()" "${XMLFILE}")
-  EXTRACT_XPATH_ARRAY=($(echo ${ITEMS} | tr "," "\n"))
-}
-
-
-function ExtractXPathArray() {
-  local XMLFILE="${1}"
-  local XPATH="${2}"
-
-  EXTRACT_XPATH_ARRAY=($(xpath -q -e "${XPATH}/text()" "${XMLFILE}"))
-}
 
 
 function DoNormalInstall() {
@@ -239,8 +249,13 @@ function InstallRTSubcomponents() {
   mono ModTekInjector.exe /install /y /manageddir="${BATTLETECH_DATA_DIR}/Managed/"
   popd >/dev/null
 
+  # TODO: RogueTechPerfFix causes a black screen with "Press [ESC] to skip" on M1.
   if [[ ! -d RogueTechPerfFix ]]; then
-    cp -R "${RTCACHE}/RogueTechPerfFix" .
+    if [[ "$(uname -p)" == "arm" ]]; then
+      echo "Skipping install of RogueTechPerfFix due to black screen error on ARM."
+    else
+      cp -R "${RTCACHE}/RogueTechPerfFix" .
+    fi
   fi
 
   local RT_CONFIG="${RTCACHE}/RtConfig.xml"
