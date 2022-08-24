@@ -150,7 +150,6 @@ function DoNormalInstall() {
     TARGET_PATH=.
   fi
 
-  echo "${EXCLUDES}"
   for item in "${RTCACHE}/${SOURCE_PATH}"/*; do
     p="$(basename "${item}")"
     if [[ ! " ${EXCLUDES[*]} " =~ " ${p} " ]]; then
@@ -160,9 +159,37 @@ function DoNormalInstall() {
   done
 }
 
+function DoBasicJSONMerge() {
+  local XMLFILE="${1}"
+  local TASK_ID="${2}"
+  local TASK_NODE_PATH="${3}"
+
+  local SOURCE_PATH=$(xpath -q -e "${TASK_NODE_PATH}/sourcePath/text()" "${XMLFILE}")
+  local TARGET_PATH=$(xpath -q -e "${TASK_NODE_PATH}/targetPath/text()" "${XMLFILE}")
+
+  echo "Merging ${SOURCE_PATH} into ${TARGET_PATH}"
+  echo "TODO: IMPLEMENT ME"
+}
+
+# As of f459d6a some tasks are skipped:
+#  modtekInstall - Handled explicitly by this script.
+#  perfixInstall - Handled explicitly by this script.
+#
+#  CommanderPortraitLoader - Included in Core by default, so it's not actually optional.
+TASK_BLACKLIST=(
+  modtekInstall
+  perfixInstall
+  CommanderPortraitLoader
+)
 function InstallTask() {
   local XMLFILE="${1}"
   local TASK_ID="${2}"
+
+  if [[ " ${TASK_BLACKLIST[*]} " =~ "${TASK_ID}" ]]; then
+    return
+  fi
+
+  echo "Installing ${TASK_ID}..."
 
   local TASK_NODE_PATH=//RogueTechConfig/Tasks/InstallTask[descendant::Id=\"${TASK_ID}\"]
 
@@ -170,11 +197,13 @@ function InstallTask() {
   case "${INSTALL_TYPE}" in
     "Install" )
       DoNormalInstall "${XMLFILE}" "${TASK_ID}" "${TASK_NODE_PATH}"
-      return
-    ;;
+      ;;
+
+    "BasicJsonMerge" )
+      DoBasicJSONMerge "${XMLFILE}" "${TASK_ID}" "${TASK_NODE_PATH}"
+      ;;
     
     "NoOp" )
-      return
       ;;
     
     *)
