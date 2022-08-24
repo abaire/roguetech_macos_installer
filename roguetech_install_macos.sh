@@ -3,7 +3,6 @@
 
 set -eu
 set -o pipefail
-set -x
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 readonly STEAM_INSTALL_DIR="${HOME}/Library/Application Support/Steam/steamapps/common/BATTLETECH/BattleTech.app"
@@ -18,6 +17,11 @@ if [[ ! $(which mono) ]]; then
 fi
 if [[ ! $(which git) ]]; then
   echo "git must be installed. See https://git-scm.com/book/en/v2/Getting-Started-Installing-Git"
+  exit 1
+fi
+if [[ ! $(which xpath) ]]; then
+  # Should be part of macOS already so hopefully this never fails.
+  echo "xpath must be installed."
   exit 1
 fi
 
@@ -115,8 +119,71 @@ popd >/dev/null
 popd
 
 
+EXTRACT_XPATH_ARRAY=()
+function ExtractXPathArrayFromString() {
+  local XMLFILE="${1}"
+  local XPATH="${2}"
 
-function install_rt_subcomponents() {
+  local ITEMS=$(xpath -q -e "${XPATH}/text()" "${XMLFILE}")
+  EXTRACT_XPATH_ARRAY=($(echo ${ITEMS} | tr "," "\n"))
+}
+
+
+function ExtractXPathArray() {
+  local XMLFILE="${1}"
+  local XPATH="${2}"
+
+  EXTRACT_XPATH_ARRAY=($(xpath -q -e "${XPATH}/text()" "${XMLFILE}"))
+}
+
+function DoNormalInstall() {
+  local XMLFILE="${1}"
+  local TASK_ID="${2}"
+  local TASK_NODE_PATH="${3}"
+
+  ExtractXPathArrayFromString "${RT_CONFIG}" ${TASK_NODE_PATH}/excludePaths
+  local EXCLUDES=${EXTRACT_XPATH_ARRAY}
+
+  local SOURCE_PATH=$(xpath -q -e "${TASK_NODE_PATH}/sourcePath/text()" "${XMLFILE}")
+  local TARGET_PATH=$(xpath -q -e "${TASK_NODE_PATH}/targetPath/text()" "${XMLFILE}")
+  if [[ -e "${TARGET_PATH}" ]]; then
+    TARGET_PATH=.
+  fi
+
+  echo "${EXCLUDES}"
+  for item in "${RTCACHE}/${SOURCE_PATH}"/*; do
+    p="$(basename "${item}")"
+    if [[ ! " ${EXCLUDES[*]} " =~ " ${p} " ]]; then
+      rm -r "${p}" 2>/dev/null || true
+      cp -R "${item}" .
+    fi
+  done
+}
+
+function InstallTask() {
+  local XMLFILE="${1}"
+  local TASK_ID="${2}"
+
+  local TASK_NODE_PATH=//RogueTechConfig/Tasks/InstallTask[descendant::Id=\"${TASK_ID}\"]
+
+  local INSTALL_TYPE=$(xpath -q -e "${TASK_NODE_PATH}/jobType/text()" "${XMLFILE}")
+  case "${INSTALL_TYPE}" in
+    "Install" )
+      DoNormalInstall "${XMLFILE}" "${TASK_ID}" "${TASK_NODE_PATH}"
+      return
+    ;;
+    
+    "NoOp" )
+      return
+      ;;
+    
+    *)
+      echo "WARNING: RTConfig install type '${INSTALL_TYPE}' for task '${TASK_ID}' not supported, ignoring."
+      ;;
+  esac  
+}
+
+function InstallRTSubcomponents() {
   local RTCACHE="${BASE}/../RtlCache/RtCache"
   pushd "${MOD_DIR}" >/dev/null
 
@@ -127,36 +194,23 @@ function install_rt_subcomponents() {
   pushd ModTek >/dev/null
   mono ModTekInjector.exe /restore /manageddir="${BATTLETECH_DATA_DIR}/Managed/"
   mono ModTekInjector.exe /install /y /manageddir="${BATTLETECH_DATA_DIR}/Managed/"
-  popd
+  popd >/dev/null
 
   if [[ ! -d RogueTechPerfFix ]]; then
     cp -R "${RTCACHE}/RogueTechPerfFix" .
   fi
 
+  local RT_CONFIG="${RTCACHE}//RtConfig.xml"
 
-  # Copy just the non-excluded items from RtConfig.xml.
-  EXCLUDES=(
-    RtConfig.xml
-    .git
-    .gitignore
-    .modtek
-    .vscode
-    Documents
-    InstallOptions
-    Optional
-    Eras
-    RogueTechPerfFix
-  )
-  for item in "${RTCACHE}"/*; do
-    p="$(basename "${item}")"
-    if [[ ! " ${EXCLUDES[*]} " =~ " ${p} " ]]; then
-      rm -r "${p}" 2>/dev/null || true
-      cp -R "${item}" .
-    fi
+  ExtractXPathArray "${RT_CONFIG}" //RogueTechConfig/Tasks/InstallTask[descendant::isSelected=\"true\"]/Id
+  local SELECTED_TASKS=${EXTRACT_XPATH_ARRAY[@]}
+
+  for task in ${SELECTED_TASKS[@]}; do
+    InstallTask "${RT_CONFIG}" "${task}"
   done
 
   # TODO: Handle the optional installs rom RtConfig.xml.
 
-  popd # MOD_DIR
+  popd >/dev/null  # MOD_DIR
 }
-install_rt_subcomponents
+InstallRTSubcomponents
