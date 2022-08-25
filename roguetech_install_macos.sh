@@ -11,7 +11,7 @@ if [[ ! -d "${STEAM_INSTALL_DIR}" ]]; then
   echo "Failed to find BattleTech.app at '${STEAM_INSTALL_DIR}'"
   exit 1
 fi
-if [[ ! $(which mono) ]]; then
+if [[ ! $(which mono64) ]]; then
   echo "mono must be installed. See https://www.mono-project.com/docs/getting-started/install/mac/"
   exit 1
 fi
@@ -245,8 +245,8 @@ function InstallRTSubcomponents() {
   fi
 
   pushd ModTek >/dev/null
-  mono ModTekInjector.exe /restore /manageddir="${BATTLETECH_DATA_DIR}/Managed/"
-  mono ModTekInjector.exe /install /y /manageddir="${BATTLETECH_DATA_DIR}/Managed/"
+  mono64 ModTekInjector.exe /restore /manageddir="${BATTLETECH_DATA_DIR}/Managed/"
+  mono64 ModTekInjector.exe /install /y /manageddir="${BATTLETECH_DATA_DIR}/Managed/"
   popd >/dev/null
 
   # TODO: RogueTechPerfFix causes a black screen with "Press [ESC] to skip" on M1.
