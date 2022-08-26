@@ -108,7 +108,7 @@ CONTENTS="${BASE}/Contents"
 RESOURCES="${CONTENTS}/Resources"
 
 MOD_DIR="${RESOURCES}/Mods"
-BATTLETECH_DATA_DIR="${CONTENTS}/MacOS/BattleTech__Data"
+BATTLETECH_DATA_DIR="${CONTENTS}/MacOS/BattleTech_Data"
 
 mkdir -p "${MOD_DIR}"
 SymlinkIfNeeded "${RESOURCES}/Data" "${BATTLETECH_DATA_DIR}"
@@ -169,16 +169,28 @@ function DoNormalInstall() {
   local EXCLUDES=${EXTRACT_XPATH_ARRAY[@]}
 
   local SOURCE_PATH=$(xpath -q -e "${TASK_NODE_PATH}/sourcePath/text()" "${XMLFILE}")
+  if [[ -z "${SOURCE_PATH}" ]]; then
+    SOURCE_PATH="${RTCACHE}"
+  else
+    SOURCE_PATH="${RTCACHE}/${SOURCE_PATH}"
+  fi
   local TARGET_PATH=$(xpath -q -e "${TASK_NODE_PATH}/targetPath/text()" "${XMLFILE}")
-  if [[ -e "${TARGET_PATH}" ]]; then
-    TARGET_PATH=.
+  if [[ -z "${TARGET_PATH}" ]]; then
+    TARGET_PATH=${MOD_DIR}
+  else
+    TARGET_PATH="${MOD_DIR}/${TARGET_PATH}"
   fi
 
-  for item in "${RTCACHE}/${SOURCE_PATH}"/*; do
-    p="$(basename "${item}")"
+  if [[ -d "${SOURCE_PATH}" ]]; then
+    mkdir -p "${TARGET_PATH}"
+  fi
+
+  for item in "${SOURCE_PATH}"/*; do
+    p="${item#"${SOURCE_PATH}/"}"
     if [[ ! " ${EXCLUDES[*]} " =~ " ${p} " ]]; then
-      rm -r "${p}" 2>/dev/null || true
-      cp -R "${item}" .
+      local TARGET="${TARGET_PATH}/${p}"
+      rm -r "${TARGET}" 2>/dev/null || true
+      cp -R "${item}" "${TARGET_PATH}"
     fi
   done
 }
