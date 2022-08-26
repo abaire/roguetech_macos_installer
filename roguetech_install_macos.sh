@@ -170,7 +170,6 @@ function _CopyHelper() {
     p="${item#"${SOURCE_PATH}/"}"
     if [[ ! " ${EXCLUDES[*]} " =~ " ${p} " ]]; then
       local TARGET="${TARGET_PATH}/${p}"
-      rm -r "${TARGET}" 2>/dev/null || true
       cp -R "${item}" "${TARGET_PATH}"
     fi
   done
@@ -184,6 +183,11 @@ function DoNormalInstall() {
 
   ExtractXPathArrayFromString "${RT_CONFIG}" ${TASK_NODE_PATH}/excludePaths
   local EXCLUDES=(${EXTRACT_XPATH_ARRAY[@]})
+
+  # The RtConfig.xml erroneously lists "Optional" as the path instead of "Optionals"
+  if [[ " ${EXCLUDES[*]} " =~ " Optional " ]]; then
+    EXCLUDES+=("Optionals")
+  fi
 
   local SOURCE_PATH=$(xpath -q -e "${TASK_NODE_PATH}/sourcePath/text()" "${XMLFILE}")
   if [[ -z "${SOURCE_PATH}" ]]; then
@@ -304,6 +308,7 @@ function InstallRTSubcomponents() {
   fi
 
   local RT_CONFIG="${RTCACHE}/RtConfig.xml"
+  cp "${RT_CONFIG}" .
 
   ExtractXPathArray "${RT_CONFIG}" //RogueTechConfig/Tasks/InstallTask[descendant::isSelected=\"true\"]/Id
   local SELECTED_TASKS=${EXTRACT_XPATH_ARRAY[@]}
