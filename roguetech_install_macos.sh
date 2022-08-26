@@ -88,9 +88,10 @@ EXTRACT_XPATH_ARRAY=()
 function ExtractXPathArrayFromString() {
   local XMLFILE="${1}"
   local XPATH="${2}"
+  local DELIMITER="${3:-,}"
 
   local ITEMS=$(xpath -q -e "${XPATH}/text()" "${XMLFILE}")
-  EXTRACT_XPATH_ARRAY=($(echo ${ITEMS} | tr "," "\n"))
+  EXTRACT_XPATH_ARRAY=($(echo ${ITEMS} | tr "${DELIMITER}" "\n"))
 }
 
 
@@ -160,27 +161,7 @@ popd >/dev/null
 popd
 
 
-function DoNormalInstall() {
-  local XMLFILE="${1}"
-  local TASK_ID="${2}"
-  local TASK_NODE_PATH="${3}"
-
-  ExtractXPathArrayFromString "${RT_CONFIG}" ${TASK_NODE_PATH}/excludePaths
-  local EXCLUDES=${EXTRACT_XPATH_ARRAY[@]}
-
-  local SOURCE_PATH=$(xpath -q -e "${TASK_NODE_PATH}/sourcePath/text()" "${XMLFILE}")
-  if [[ -z "${SOURCE_PATH}" ]]; then
-    SOURCE_PATH="${RTCACHE}"
-  else
-    SOURCE_PATH="${RTCACHE}/${SOURCE_PATH}"
-  fi
-  local TARGET_PATH=$(xpath -q -e "${TASK_NODE_PATH}/targetPath/text()" "${XMLFILE}")
-  if [[ -z "${TARGET_PATH}" ]]; then
-    TARGET_PATH=${MOD_DIR}
-  else
-    TARGET_PATH="${MOD_DIR}/${TARGET_PATH}"
-  fi
-
+function _CopyHelper() {
   if [[ -d "${SOURCE_PATH}" ]]; then
     mkdir -p "${TARGET_PATH}"
   fi
@@ -195,6 +176,54 @@ function DoNormalInstall() {
   done
 }
 
+
+function DoNormalInstall() {
+  local XMLFILE="${1}"
+  local TASK_ID="${2}"
+  local TASK_NODE_PATH="${3}"
+
+  ExtractXPathArrayFromString "${RT_CONFIG}" ${TASK_NODE_PATH}/excludePaths
+  local EXCLUDES=(${EXTRACT_XPATH_ARRAY[@]})
+
+  local SOURCE_PATH=$(xpath -q -e "${TASK_NODE_PATH}/sourcePath/text()" "${XMLFILE}")
+  if [[ -z "${SOURCE_PATH}" ]]; then
+    SOURCE_PATH="${RTCACHE}"
+  else
+    SOURCE_PATH="${RTCACHE}/${SOURCE_PATH}"
+  fi
+  local TARGET_PATH=$(xpath -q -e "${TASK_NODE_PATH}/targetPath/text()" "${XMLFILE}")
+  if [[ -z "${TARGET_PATH}" ]]; then
+    TARGET_PATH=${MOD_DIR}
+  else
+    TARGET_PATH="${MOD_DIR}/${TARGET_PATH}"
+  fi
+
+  _CopyHelper
+}
+
+
+function DoMultiNormalInstall() {
+  local XMLFILE="${1}"
+  local TASK_ID="${2}"
+  local TASK_NODE_PATH="${3}"
+
+  ExtractXPathArrayFromString "${RT_CONFIG}" ${TASK_NODE_PATH}/excludePaths
+  local EXCLUDES=("${EXTRACT_XPATH_ARRAY[@]}")
+
+  ExtractXPathArrayFromString "${RT_CONFIG}" ${TASK_NODE_PATH}/sourcePath ", "
+  SOURCE_PATHS=("${EXTRACT_XPATH_ARRAY[@]}")
+  ExtractXPathArrayFromString "${RT_CONFIG}" ${TASK_NODE_PATH}/targetPath ", "
+  TARGET_PATHS=("${EXTRACT_XPATH_ARRAY[@]}")
+
+  i=0
+  for SOURCE_PATH in "${SOURCE_PATHS[@]}"; do
+    SOURCE_PATH="${RTCACHE}/${SOURCE_PATH}"
+    TARGET_PATH="${MOD_DIR}/${TARGET_PATHS[i]}"
+    i+=1
+
+    _CopyHelper
+  done
+}
 
 function DoBasicJSONMerge() {
   local XMLFILE="${1}"
@@ -236,17 +265,21 @@ function InstallTask() {
       DoNormalInstall "${XMLFILE}" "${TASK_ID}" "${TASK_NODE_PATH}"
       ;;
 
+    "MultiComponentInstall" )
+      DoMultiNormalInstall "${XMLFILE}" "${TASK_ID}" "${TASK_NODE_PATH}"
+      ;;
+
     "BasicJsonMerge" )
       DoBasicJSONMerge "${XMLFILE}" "${TASK_ID}" "${TASK_NODE_PATH}"
       ;;
-    
+
     "NoOp" )
       ;;
-    
+
     *)
       echo "WARNING: RTConfig install type '${INSTALL_TYPE}' for task '${TASK_ID}' not supported, ignoring."
       ;;
-  esac  
+  esac
 }
 
 function InstallRTSubcomponents() {
