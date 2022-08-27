@@ -5,9 +5,9 @@ Script to install [RogueTech](https://roguetech.fandom.com/wiki/Installation#mac
 * A Steam install of Battletech (it should be easy to extend this to other distributions by extending the basic `STEAM_INSTALL_DIR` check, contributions welcome)
 * `mono`
 * `git`
-* `xpath` - should be bundled with macOS or Xcode command line tools
 * `python3` - should be bundled with macOS
 * `json5` Python module
+* `xmltodict` Python module
 
 The script should check for missing requirements and give hints for how to install them.
 
