@@ -337,12 +337,12 @@ class Installer:
     def _installed_config_path(self):
         return os.path.join(self.mod_dir, _RT_CONFIG_FILENAME)
 
-    def _print_task_info(self, task: dict):
+    def _print_task_info(self, task: dict, prefix=""):
         id = task["Id"]
         name = task["uiName"]
         descr = task["uiDescription"]
 
-        print(id)
+        print(f"{prefix}{id}")
         if name:
             print(
                 "\n".join(
@@ -369,14 +369,14 @@ class Installer:
         tasks = filter(lambda x: x["canSelect"] == "true", _get_selected_tasks(config))
         print("Enabled components:")
         for task in tasks:
-            self._print_task_info(task)
+            self._print_task_info(task, "+ ")
 
         tasks = filter(
             lambda x: x["canSelect"] == "true", _get_deselected_tasks(config)
         )
         print("Disabled components:")
         for task in tasks:
-            self._print_task_info(task)
+            self._print_task_info(task, "- ")
 
 
 def _main(args):
