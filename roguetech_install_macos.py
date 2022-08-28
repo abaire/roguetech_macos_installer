@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from collections import defaultdict
 import glob
 import json
 import logging
@@ -94,6 +95,16 @@ def symlink_dir_if_needed(target: str, link: str):
 def _load_xml_dict(path: str) -> dict:
     with open(path, encoding="utf-8") as infile:
         return xmltodict.parse(infile.read())
+
+
+def _index_tasks_by_option_group(config: dict) -> dict:
+    """Returns a dict mappibng optionGroupId -> [InstallTask]"""
+    ret = defaultdict(list)
+    tasks = config["RogueTechConfig"]["Tasks"]["InstallTask"]
+    for task in tasks:
+        group = task["optionGroupId"]
+        ret[group].append(task)
+    return ret
 
 
 def _get_selected_tasks(config: dict) -> list:
@@ -366,17 +377,27 @@ class Installer:
             config = _load_xml_dict(self.rtconfig)
             logging.debug("Using default config file.")
 
-        tasks = filter(lambda x: x["canSelect"] == "true", _get_selected_tasks(config))
-        print("Enabled components:")
-        for task in tasks:
-            self._print_task_info(task, "+ ")
+        task_index = _index_tasks_by_option_group(config)
 
-        tasks = filter(
-            lambda x: x["canSelect"] == "true", _get_deselected_tasks(config)
-        )
-        print("Disabled components:")
-        for task in tasks:
-            self._print_task_info(task, "- ")
+        groups = {}
+        options = config["RogueTechConfig"]["Options"]["InstallOption"]
+        for option in options:
+            group_id = option["optionId"]
+            groups[group_id] = option
+
+        for group_id, group in groups.items():
+            tasks = filter(lambda x: x["canSelect"] == "true", task_index[group_id])
+            if not tasks:
+                continue
+            group_name = group["optionUiName"]
+            print(group_name)
+            print("=" * len(group_name))
+            for task in tasks:
+                if task["isSelected"] == "true":
+                    self._print_task_info(task, "+ ")
+                else:
+                    self._print_task_info(task, "- ")
+            print("")
 
 
 def _main(args):
