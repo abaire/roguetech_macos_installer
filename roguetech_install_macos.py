@@ -32,7 +32,11 @@ _STEAM_INSTALL_DIR = (
 _RT_CONFIG_FILENAME = "RtConfig.xml"
 
 # As of f459d6a some tasks are skipped:
-_TASK_BLACKLIST = {"modtekInstall", "perfixInstall", "CommanderPortraitLoader"}
+_TASK_BLACKLIST = {
+    "modtekInstall",  # Handled by this install script directly.
+    "perfixInstall",  # Appears to cause the game to become stuck when prewarming cache or loading blocks.
+    "CommanderPortraitLoader", # Included in the Core by default.
+}
 
 
 def _merge_dicts(a: dict, b: dict, path=None):
@@ -308,6 +312,30 @@ class Installer:
         with open(boot_config, "w", encoding="utf-8") as outfile:
             outfile.writelines(contents)
 
+    def _run_process_and_install(self, task):
+        source_path = os.path.join(self.rtcache, task["sourcePath"] or "")
+        installer = task["targetPath"]
+
+        # The only use of this install type appears to be the perfixInstall task, which sets `sourcePath` to the
+        # installer directory and `targetPath` to the name of the installer binary.
+        try:
+            output = subprocess.check_output(
+                [
+                    "mono64",
+                    installer,
+                ],
+                stderr=subprocess.STDOUT,
+                cwd=source_path,
+            )
+            logging.debug(f"Ran installer {installer}: {output}")
+        except subprocess.CalledProcessError as err:
+            output = err.output.decode("utf-8")
+            logging.error(f"Failed to run installer {source_path}/{installer}: {output}")
+            raise
+
+        # The installer then copies the directory with an implicit targetPath of /basename(source_path)
+        _filtered_copy(source_path, os.path.join(self.mod_dir, os.path.basename(source_path)), set())
+
     def _install_task(self, task: dict):
         task_id = task["Id"]
         if task_id in _TASK_BLACKLIST:
@@ -339,6 +367,10 @@ class Installer:
             self._set_boot_config_gfx_jobs(1)
             return
 
+        if jobtype == "RunProcessAndInstall":
+            self._run_process_and_install(task)
+            return
+
         logging.warning(
             f"Skipping unsupported install type {jobtype} for task {task_id}"
         )
@@ -352,15 +384,6 @@ class Installer:
             shutil.copytree(os.path.join(self.rtcache, "ModTek"), injector)
 
         self._install_injector(injector)
-
-        #   # TODO: RogueTechPerfFix causes a black screen with "Press [ESC] to skip" on M1.
-        #   if [[ ! -d RogueTechPerfFix ]]; then
-        #     if [[ "$(uname -p)" == "arm" ]]; then
-        #       echo "Skipping install of RogueTechPerfFix due to black screen error on ARM."
-        #     else
-        #       cp -R "${RTCACHE}/RogueTechPerfFix" .
-        #     fi
-        #   fi
 
         logging.info("Copying RogueTech config...")
         shutil.copy2(self.rtconfig, self._installed_config_path())
