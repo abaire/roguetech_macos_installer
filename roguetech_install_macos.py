@@ -289,6 +289,25 @@ class Installer:
         target_path = os.path.join(self.mod_dir, task["targetPath"] or "")
         _merge_json_files(source_path, target_path)
 
+    def _set_boot_config_gfx_jobs(self, job_count):
+        boot_config = os.path.join(self.battletech_data_dir, "boot.config")
+        with open(boot_config, encoding="utf-8") as infile:
+            contents = infile.readlines()
+
+        filter = lambda x: not x.startswith("gfx-enable-native-gfx-jobs=") and not x.startswith("gfx-enable-gfx-jobs=")
+        contents = [line for line in contents if filter(line)]
+
+        if job_count:
+            contents.extend([
+                "gfx-enable-gfx-jobs=1\n",
+                f"gfx-enable-native-gfx-jobs={job_count}\n"
+            ])
+        else:
+            contents.append("gfx-enable-native-gfx-jobs=\n")
+
+        with open(boot_config, "w", encoding="utf-8") as outfile:
+            outfile.writelines(contents)
+
     def _install_task(self, task: dict):
         task_id = task["Id"]
         if task_id in _TASK_BLACKLIST:
@@ -310,6 +329,14 @@ class Installer:
 
         if jobtype == "BasicJsonMerge":
             self._basic_json_merge(task)
+            return
+
+        if jobtype == "DefaultBootConfig":
+            self._set_boot_config_gfx_jobs(0)
+            return
+
+        if jobtype == "MThreadBootConfig":
+            self._set_boot_config_gfx_jobs(1)
             return
 
         logging.warning(
